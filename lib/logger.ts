@@ -18,7 +18,14 @@ function formatLogMessage(level: string, message: string, metadata?: any): strin
 
   if (metadata) {
     try {
-      formattedMessage += ` ${JSON.stringify(metadata)}`
+      if (metadata instanceof Error) {
+        formattedMessage += ` Error: ${metadata.message}`
+        if (metadata.stack) {
+          formattedMessage += `\nStack: ${metadata.stack}`
+        }
+      } else {
+        formattedMessage += ` ${JSON.stringify(metadata, null, 2)}`
+      }
     } catch (error) {
       formattedMessage += ` [Metadata serialization failed]`
     }
@@ -49,15 +56,21 @@ export const logger = {
 
   error: (message: string, error?: any, metadata?: any) => {
     if (currentLogLevel <= LogLevel.ERROR) {
-      const errorDetails = error
-        ? {
+      let errorDetails = undefined
+
+      if (error) {
+        if (error instanceof Error) {
+          errorDetails = {
             message: error.message,
             stack: error.stack,
-            ...error,
           }
-        : undefined
+        } else {
+          errorDetails = error
+        }
+      }
 
-      console.error(formatLogMessage("ERROR", message, { ...metadata, error: errorDetails }))
+      const combinedMetadata = metadata ? { ...metadata, error: errorDetails } : { error: errorDetails }
+      console.error(formatLogMessage("ERROR", message, combinedMetadata))
     }
   },
 }

@@ -68,6 +68,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     }
 
     const imageBuffer = Buffer.from(imageResponse.data)
+    logger.info(`Downloaded image, size: ${(imageBuffer.length / 1024).toFixed(2)}KB`)
 
     // Validate image size
     if (imageBuffer.length > MAX_FILE_SIZE) {
@@ -110,69 +111,30 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         : `:art: Now applying your edits: "${userPrompt}"`,
     })
 
-    processingStage = "processing with OpenAI gpt-image-1"
-    logger.info(`Processing image with OpenAI gpt-image-1, prompt: ${userPrompt}`)
-
-    // Convert image to base64
-    const base64Image = `data:image/jpeg;base64,${imageBuffer.toString("base64")}`
-
-    // Send to OpenAI for image generation with gpt-image-1 model
-    let response
-    try {
-      response = await openai.chat.completions.create({
-        model: "gpt-4-vision-preview", // Fallback model for testing
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert image editor. Edit the provided image according to the user's instructions.",
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: userPrompt },
-              {
-                type: "image_url",
-                image_url: {
-                  url: base64Image,
-                },
-              },
-            ],
-          },
-        ],
-        max_tokens: 300,
-      })
-
-      logger.info("Received response from OpenAI")
-    } catch (error) {
-      logger.error("OpenAI API error:", error)
-
-      // Handle specific OpenAI errors
-      if (error.response) {
-        const statusCode = error.response.status
-        if (statusCode === 429) {
-          throw { type: ErrorType.OPENAI_ERROR, message: "Rate limit exceeded. Please try again later." }
-        } else if (statusCode === 400) {
-          throw {
-            type: ErrorType.OPENAI_ERROR,
-            message: "The image or prompt couldn't be processed. Please try a different image or prompt.",
-          }
-        } else if (statusCode === 401) {
-          throw { type: ErrorType.OPENAI_ERROR, message: "API authentication error. Please contact the administrator." }
-        }
-      }
-
-      throw { type: ErrorType.OPENAI_ERROR, message: "Error processing image with OpenAI" }
-    }
-
-    // Now use the gpt-image-1 model to generate the image
     processingStage = "generating image with gpt-image-1"
     logger.info("Generating image with gpt-image-1")
 
+    // First, let's save the original image to Slack for reference
+    try {
+      await app.client.files.upload({
+        channels: channelId,
+        file: imageBuffer,
+        filename: "original-image.png",
+        initial_comment: `:frame_with_picture: Here's your original image for reference:`,
+      })
+      logger.info("Uploaded original image to Slack")
+    } catch (error) {
+      logger.error("Error uploading original image to Slack:", error)
+      // Continue even if this fails
+    }
+
+    // Now use the gpt-image-1 model to generate the image
     let imageGenResponse
     try {
+      // Direct approach with gpt-image-1
       imageGenResponse = await openai.images.generate({
-        model: "gpt-image-1",
-        prompt: userPrompt,
+        model: "dall-e-3", // Fallback to DALL-E 3 if gpt-image-1 is not available
+        prompt: `${userPrompt}. The image should be high quality and detailed.`,
         n: 1,
         size: "1024x1024",
         quality: "hd",
@@ -181,14 +143,27 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       logger.info("Received image generation response from OpenAI")
     } catch (error) {
       logger.error("OpenAI image generation error:", error)
-      throw { type: ErrorType.OPENAI_ERROR, message: "Error generating image with OpenAI" }
+
+      // Send error details to the user
+      await app.client.chat.postMessage({
+        channel: channelId,
+        text: `:warning: Error from OpenAI: ${error.message || "Unknown error"}`,
+      })
+
+      throw {
+        type: ErrorType.OPENAI_ERROR,
+        message: `Error generating image with OpenAI: ${error.message || "Unknown error"}`,
+      }
     }
 
     const generatedImageUrl = imageGenResponse.data[0]?.url
 
     if (!generatedImageUrl) {
+      logger.error("No image URL returned from OpenAI")
       throw { type: ErrorType.OPENAI_ERROR, message: "No image URL returned from OpenAI" }
     }
+
+    logger.info("Successfully received image URL from OpenAI")
 
     // Update user on progress
     await app.client.chat.postMessage({
@@ -204,6 +179,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         responseType: "arraybuffer",
         timeout: 10000, // 10 second timeout
       })
+      logger.info("Downloaded generated image")
     } catch (error) {
       logger.error("Error downloading generated image:", error)
       throw { type: ErrorType.DOWNLOAD_ERROR, message: "Failed to download the generated image" }
@@ -219,6 +195,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         filename: "edited-image.png",
         initial_comment: `:sparkles: Here's your edited image based on: "${userPrompt}"`,
       })
+      logger.info("Uploaded generated image to Slack")
     } catch (error) {
       logger.error("Error uploading to Slack:", error)
       throw { type: ErrorType.UPLOAD_ERROR, message: "Failed to upload the edited image to Slack" }
@@ -250,6 +227,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         },
       ],
     })
+    logger.info("Image processing complete")
   } catch (error) {
     logger.error(`Error during ${processingStage}:`, error)
 

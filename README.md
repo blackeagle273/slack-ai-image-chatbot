@@ -1,15 +1,16 @@
 # Slack Image Editor Bot
 
-A Slackbot that allows users to upload images via DM and uses OpenAI's image generation capabilities to modify them.
+A Slackbot that allows users to upload images via DM and uses OpenAI's DALL-E 3 model to generate modified versions based on text prompts.
 
 ## Features
 
 - Receive images via direct messages in Slack
-- Process images using OpenAI's image generation API
+- Process images using OpenAI's DALL-E 3 model
 - Send modified images back to the user
 - Robust error handling and user feedback
 - Image validation for size and format
 - Detailed processing status updates
+- Preset editing styles with simple commands
 
 ## Setup
 
@@ -17,7 +18,7 @@ A Slackbot that allows users to upload images via DM and uses OpenAI's image gen
 
 - Node.js 18 or later
 - A Slack workspace where you can create apps
-- An OpenAI API key
+- An OpenAI API key with access to DALL-E 3
 
 ### Environment Variables
 
@@ -91,6 +92,22 @@ The bot supports several preset editing styles that can be applied by using comm
 To use a preset, simply upload an image and type the command (e.g., `/enhance`) in your message.
 
 Type `/help` to see a list of all available commands.
+
+## How It Works
+
+1. User uploads an image to the bot via DM
+2. The bot downloads the image and validates it
+3. The bot uses OpenAI's DALL-E 3 model to generate a new image based on the user's prompt
+4. The bot uploads both the original and modified images back to the Slack conversation
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. Check the logs in your Vercel deployment
+2. Ensure your OpenAI API key has access to DALL-E 3
+3. Verify that your Slack bot has the necessary permissions
+4. Make sure your images are in a supported format (JPEG or PNG) and under 10MB
 
 ## Error Handling
 
