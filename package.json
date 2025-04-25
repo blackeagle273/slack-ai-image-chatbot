@@ -58,12 +58,12 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
     "zod": "^3.24.1",
-    "@types/express": "latest",
     "ws": "latest",
-    "@slack/bolt": "latest",
+    "@types/express": "latest",
     "crypto": "latest",
     "openai": "latest",
-    "axios": "latest"
+    "axios": "latest",
+    "@slack/bolt": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
