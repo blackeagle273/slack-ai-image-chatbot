@@ -2,8 +2,8 @@ import { NextResponse } from "next/server"
 import { App, LogLevel } from "@slack/bolt"
 import { processImageRequest } from "@/lib/process-image"
 import { verifySlackRequest } from "@/lib/verify-slack"
-// Import the help text generator
 import { generateHelpText } from "@/lib/editing-options"
+import { logger } from "@/lib/logger"
 
 // Initialize the Slack app
 const app = new App({
@@ -35,7 +35,7 @@ async function handleHelpRequest(channelId: string) {
       ],
     })
   } catch (error) {
-    console.error("Error sending help information:", error)
+    logger.error("Error sending help information:", error)
   }
 }
 
@@ -46,11 +46,12 @@ export async function POST(request: Request) {
     const isValid = await verifySlackRequest(request, rawBody)
 
     if (!isValid) {
-      console.error("Invalid Slack signature")
+      logger.error("Invalid Slack signature")
       return NextResponse.json({ error: "Invalid request signature" }, { status: 401 })
     }
 
     const payload = JSON.parse(rawBody)
+    logger.debug("Received Slack event", { type: payload.type })
 
     // Handle URL verification challenge
     if (payload.type === "url_verification") {
@@ -61,12 +62,23 @@ export async function POST(request: Request) {
     if (payload.type === "event_callback") {
       const event = payload.event
 
+      // Skip bot messages to prevent loops
+      if (event.bot_id || event.subtype === "bot_message") {
+        logger.debug("Skipping bot message")
+        return NextResponse.json({ ok: true })
+      }
+
+      logger.info(`Received event: ${event.type} from user: ${event.user}`)
+
       // Handle direct messages with files
       if (event.type === "message" && event.channel_type === "im") {
-        if (event.files) {
+        // Check if this is a message with files
+        if (event.files && event.files.length > 0) {
+          logger.info(`Processing message with ${event.files.length} files`)
+
           // Process asynchronously to respond to Slack quickly
           processEvent(event).catch((error) => {
-            console.error("Error in async event processing:", error)
+            logger.error("Error in async event processing:", error)
             notifyErrorToUser(
               event.channel,
               "There was an error processing your request. Please try again later.",
@@ -74,9 +86,11 @@ export async function POST(request: Request) {
           })
         } else if (event.text && event.text.trim().toLowerCase() === "/help") {
           // Handle help command without an image
+          logger.info("Processing help request")
           handleHelpRequest(event.channel).catch(console.error)
         } else {
           // Handle messages without files
+          logger.info("Notifying user about missing image")
           notifyUserAboutMissingImage(event.channel, event.user).catch(console.error)
         }
       }
@@ -85,7 +99,7 @@ export async function POST(request: Request) {
     // Respond quickly to acknowledge receipt
     return NextResponse.json({ ok: true })
   } catch (error) {
-    console.error("Error handling Slack event:", error)
+    logger.error("Error handling Slack event:", error)
 
     // Determine if it's a parsing error
     if (error instanceof SyntaxError) {
@@ -107,6 +121,7 @@ async function processEvent(event: any) {
     const imageFiles = files.filter((file: any) => file.mimetype && file.mimetype.startsWith("image/"))
 
     if (imageFiles.length > 0) {
+      logger.info(`Processing ${imageFiles.length} image files`)
       // Process the first image
       await processImageRequest({
         imageUrl: imageFiles[0].url_private,
@@ -117,13 +132,14 @@ async function processEvent(event: any) {
       })
     } else {
       // Inform user that no valid images were found
+      logger.info("No valid image files found")
       await app.client.chat.postMessage({
         channel: channelId,
         text: "I can only process image files. Please upload an image with your instructions.",
       })
     }
   } catch (error) {
-    console.error("Error processing event:", error)
+    logger.error("Error processing event:", error)
   }
 }
 
@@ -134,7 +150,7 @@ async function notifyUserAboutMissingImage(channelId: string, userId: string) {
       text: `<@${userId}> I need an image to work with! Please upload an image along with your instructions.`,
     })
   } catch (error) {
-    console.error("Error sending missing image notification:", error)
+    logger.error("Error sending missing image notification:", error)
   }
 }
 
@@ -145,7 +161,7 @@ async function notifyErrorToUser(channelId: string, message: string) {
       text: message,
     })
   } catch (error) {
-    console.error("Error sending error notification:", error)
+    logger.error("Error sending error notification:", error)
   }
 }
 

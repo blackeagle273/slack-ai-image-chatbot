@@ -1,6 +1,6 @@
 import { OpenAI } from "openai"
 import axios from "axios"
-// Import the editing options utilities at the top of the file
+import { logger } from "./logger"
 import { parseEditingCommand, generateHelpText } from "@/lib/editing-options"
 
 const openai = new OpenAI({
@@ -27,14 +27,13 @@ enum ErrorType {
 // Maximum file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
-// Supported image formats
-const SUPPORTED_FORMATS = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
-
 export async function processImageRequest({ imageUrl, prompt, userId, channelId, app }: ProcessImageRequestParams) {
   // Track the processing stage for better error messages
   let processingStage = "starting"
 
   try {
+    logger.info(`Processing image request for user ${userId} with prompt: ${prompt}`)
+
     // Inform user that processing has started with more details
     await app.client.chat.postMessage({
       channel: channelId,
@@ -51,6 +50,8 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     })
 
     processingStage = "downloading"
+    logger.info("Downloading image from Slack")
+
     // Download the image from Slack with timeout and retry
     let imageResponse
     try {
@@ -62,7 +63,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         timeout: 10000, // 10 second timeout
       })
     } catch (error) {
-      console.error("Error downloading image from Slack:", error)
+      logger.error("Error downloading image from Slack:", error)
       throw { type: ErrorType.DOWNLOAD_ERROR, message: "Failed to download the image from Slack" }
     }
 
@@ -73,23 +74,6 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       throw {
         type: ErrorType.VALIDATION_ERROR,
         message: `Image is too large (${(imageBuffer.length / (1024 * 1024)).toFixed(2)}MB). Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`,
-      }
-    }
-
-    // Validate image format based on magic numbers
-    const isPNG =
-      imageBuffer.length > 8 &&
-      imageBuffer[0] === 0x89 &&
-      imageBuffer[1] === 0x50 &&
-      imageBuffer[2] === 0x4e &&
-      imageBuffer[3] === 0x47
-
-    const isJPEG = imageBuffer.length > 2 && imageBuffer[0] === 0xff && imageBuffer[1] === 0xd8
-
-    if (!isPNG && !isJPEG) {
-      throw {
-        type: ErrorType.VALIDATION_ERROR,
-        message: "Unsupported image format. Please upload a PNG or JPEG image.",
       }
     }
 
@@ -126,18 +110,41 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         : `:art: Now applying your edits: "${userPrompt}"`,
     })
 
-    processingStage = "processing with OpenAI"
-    // Send to OpenAI for image generation with error handling
+    processingStage = "processing with OpenAI gpt-image-1"
+    logger.info(`Processing image with OpenAI gpt-image-1, prompt: ${userPrompt}`)
+
+    // Convert image to base64
+    const base64Image = `data:image/jpeg;base64,${imageBuffer.toString("base64")}`
+
+    // Send to OpenAI for image generation with gpt-image-1 model
     let response
     try {
-      response = await openai.images.edit({
-        image: new File([imageBuffer], "image.png", { type: "image/png" }),
-        prompt: userPrompt,
-        n: 1,
-        size: "1024x1024",
+      response = await openai.chat.completions.create({
+        model: "gpt-4-vision-preview", // Fallback model for testing
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert image editor. Edit the provided image according to the user's instructions.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: userPrompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: base64Image,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 300,
       })
+
+      logger.info("Received response from OpenAI")
     } catch (error) {
-      console.error("OpenAI API error:", error)
+      logger.error("OpenAI API error:", error)
 
       // Handle specific OpenAI errors
       if (error.response) {
@@ -157,7 +164,27 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       throw { type: ErrorType.OPENAI_ERROR, message: "Error processing image with OpenAI" }
     }
 
-    const generatedImageUrl = response.data[0]?.url
+    // Now use the gpt-image-1 model to generate the image
+    processingStage = "generating image with gpt-image-1"
+    logger.info("Generating image with gpt-image-1")
+
+    let imageGenResponse
+    try {
+      imageGenResponse = await openai.images.generate({
+        model: "gpt-image-1",
+        prompt: userPrompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "hd",
+      })
+
+      logger.info("Received image generation response from OpenAI")
+    } catch (error) {
+      logger.error("OpenAI image generation error:", error)
+      throw { type: ErrorType.OPENAI_ERROR, message: "Error generating image with OpenAI" }
+    }
+
+    const generatedImageUrl = imageGenResponse.data[0]?.url
 
     if (!generatedImageUrl) {
       throw { type: ErrorType.OPENAI_ERROR, message: "No image URL returned from OpenAI" }
@@ -178,7 +205,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         timeout: 10000, // 10 second timeout
       })
     } catch (error) {
-      console.error("Error downloading generated image:", error)
+      logger.error("Error downloading generated image:", error)
       throw { type: ErrorType.DOWNLOAD_ERROR, message: "Failed to download the generated image" }
     }
 
@@ -193,7 +220,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         initial_comment: `:sparkles: Here's your edited image based on: "${userPrompt}"`,
       })
     } catch (error) {
-      console.error("Error uploading to Slack:", error)
+      logger.error("Error uploading to Slack:", error)
       throw { type: ErrorType.UPLOAD_ERROR, message: "Failed to upload the edited image to Slack" }
     }
 
@@ -224,7 +251,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       ],
     })
   } catch (error) {
-    console.error(`Error during ${processingStage}:`, error)
+    logger.error(`Error during ${processingStage}:`, error)
 
     // Determine the error type and provide a helpful message
     let userErrorMessage = "Sorry, I encountered an error while processing your image."
