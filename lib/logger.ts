@@ -12,7 +12,7 @@ const currentLogLevel = process.env.LOG_LEVEL
   : LogLevel.INFO
 
 // Format the log message with timestamp and metadata
-function formatLogMessage(level: string, message: string, metadata?: any): string {
+function formatLogMessage(level: string, message: string, metadata?: unknown): string {
   const timestamp = new Date().toISOString()
   let formattedMessage = `[${timestamp}] [${level}] ${message}`
 
@@ -26,7 +26,7 @@ function formatLogMessage(level: string, message: string, metadata?: any): strin
       } else {
         formattedMessage += ` ${JSON.stringify(metadata, null, 2)}`
       }
-    } catch (error) {
+    } catch (_error) {
       formattedMessage += ` [Metadata serialization failed]`
     }
   }
@@ -36,25 +36,25 @@ function formatLogMessage(level: string, message: string, metadata?: any): strin
 
 // Logger implementation
 export const logger = {
-  debug: (message: string, metadata?: any) => {
+  debug: (message: string, metadata?: unknown) => {
     if (currentLogLevel <= LogLevel.DEBUG) {
       console.debug(formatLogMessage("DEBUG", message, metadata))
     }
   },
 
-  info: (message: string, metadata?: any) => {
+  info: (message: string, metadata?: unknown) => {
     if (currentLogLevel <= LogLevel.INFO) {
       console.info(formatLogMessage("INFO", message, metadata))
     }
   },
 
-  warn: (message: string, metadata?: any) => {
+  warn: (message: string, metadata?: unknown) => {
     if (currentLogLevel <= LogLevel.WARN) {
       console.warn(formatLogMessage("WARN", message, metadata))
     }
   },
 
-  error: (message: string, error?: any, metadata?: any) => {
+  error: (message: string, error?: unknown, metadata?: unknown) => {
     if (currentLogLevel <= LogLevel.ERROR) {
       let errorDetails = undefined
 

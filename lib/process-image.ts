@@ -3,6 +3,7 @@ import axios from "axios"
 import fs from "fs"
 import { logger } from "./logger"
 import { parseEditingCommand, generateHelpText } from "@/lib/editing-options"
+import { App } from "@slack/bolt"
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -13,7 +14,7 @@ interface ProcessImageRequestParams {
   prompt: string
   userId: string
   channelId: string
-  app: any // Slack App instance
+  app: App // Slack App instance
 }
 
 // Define error types for better handling
