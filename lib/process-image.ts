@@ -1,5 +1,6 @@
 import { OpenAI } from "openai"
 import axios from "axios"
+import fs from "fs"
 import { logger } from "./logger"
 import { parseEditingCommand, generateHelpText } from "@/lib/editing-options"
 import { App } from "@slack/bolt"
@@ -102,8 +103,6 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     processingStage = "generating image with gpt-image-1"
     logger.info("Generating image with gpt-image-1")
 
-    let img1 = open(imageUrl,'rb');
-
     // Now use the gpt-image-1 model to generate the image
     let imageGenResponse
     try {
@@ -111,7 +110,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       imageGenResponse = await openai.images.edit({
         model: "gpt-image-1",
         prompt: userPrompt,
-        image: [img1],
+        image: fs.readFileSync(imageUrl),
       })
 
       logger.info("Received image generation response from OpenAI")

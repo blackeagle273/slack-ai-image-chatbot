@@ -68,10 +68,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      logger.info(`Received event: ${event.type} from user: ${event.user}`)
+      logger.info(`Received event: ${event.type} from user: ${event.user_id}`)
 
       // Log full event object if user is undefined
-      if (!event.user) {
+      if (!event.user_id) {
         logger.debug("Event object with undefined user:", event)
       }
 
