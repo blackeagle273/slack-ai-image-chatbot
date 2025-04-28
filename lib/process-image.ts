@@ -106,11 +106,14 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     // Prepare image input for OpenAI images.edit
     let img_input
     if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-      // Download image as stream
-      logger.debug("Starting image download from URL with timeout")
-      const response = await axios.get(imageUrl, { responseType: "stream", timeout: 10000 })
+      // Download image as arraybuffer and convert to File-like object
+      logger.debug("Downloading image as arraybuffer for OpenAI API")
+      const response = await axios.get(imageUrl, { responseType: "arraybuffer", timeout: 10000 })
       logger.debug("Image download response received")
-      img_input = response.data
+      const buffer = Buffer.from(response.data)
+      // Create a File-like object with required properties for OpenAI API
+      const file = new File([buffer], "image.png", { type: "image/png" })
+      img_input = file
     } else {
       // Read local file as stream
       img_input = fs.createReadStream(imageUrl)
