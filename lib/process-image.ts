@@ -36,6 +36,15 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
 
     // Inform user that processing has started with more details
     logger.debug("Sending initial processing message to Slack")
+    if (!app || !app.client) {
+      console.error("Slack app client is not initialized");
+      return;
+    }
+    if (!channelId) {
+      console.error("channelId is missing or invalid");
+      return;
+    }
+    console.debug(`Posting initial processing message to Slack in channel ${channelId} with prompt: ${prompt}`);
     try {
       await app.client.chat.postMessage({
         channel: channelId,
@@ -52,6 +61,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       });
     } catch (error) {
       console.error("Failed to post message to Slack:", error);
+      throw error;
     }
     logger.debug("Initial processing message sent to Slack")
 
