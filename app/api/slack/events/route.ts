@@ -68,7 +68,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      logger.info(`Received event: ${event.type} from user: ${event.user}`)
+      if (event.type === 'file_shared') {
+        logger.debug("Skipping file shared")
+        return NextResponse.json({ ok: true })
+      }
+
+      logger.info(`Received event: ${event.type} from user: ${event.user} in channelID: ${event.channelId} || chaneel: ${event.channel}`)
 
       // Log full event object if user is undefined
       if (!event.user) {
