@@ -122,7 +122,19 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
       // Download image as arraybuffer and convert to File-like object
       logger.debug("Downloading image as arraybuffer for OpenAI API")
-      const response = await axios.get(imageUrl, { responseType: "arraybuffer", timeout: 10000 })
+      // Add Authorization header to access private Slack image URL
+      const slackToken = process.env.SLACK_BOT_TOKEN
+      if (!slackToken) {
+        logger.error("Slack token is missing, cannot download private image URL")
+        throw new Error("Slack token is missing, cannot download private image URL")
+      }
+      const response = await axios.get(imageUrl, {
+        responseType: "arraybuffer",
+        timeout: 10000,
+        headers: {
+          Authorization: `Bearer ${slackToken}`,
+        },
+      })
       logger.debug("Image download response received")
       const buffer = Buffer.from(response.data)
       // Create a File-like object with required properties for OpenAI API
