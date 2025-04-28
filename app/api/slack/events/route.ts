@@ -98,33 +98,6 @@ export async function POST(request: Request) {
           logger.info("Notifying user about missing image")
           notifyUserAboutMissingImage(event.channel, event.user).catch(console.error)
         }
-      } else if (event.type === "file_shared") {
-        logger.info("Handling file_shared event")
-        // Fetch file info and process if image
-        try {
-          const fileId = event.file_id
-          const fileInfo = await app.client.files.info({ file: fileId })
-          if (fileInfo.file && fileInfo.file.mimetype && fileInfo.file.mimetype.startsWith("image/")) {
-            // Construct a pseudo event to reuse processEvent
-            const pseudoEvent = {
-              files: [fileInfo.file],
-              user: event.user_id || event.user,
-              channel: event.channel_id || event.channel,
-              text: "", // No prompt text in file_shared event
-            }
-            processEvent(pseudoEvent, app).catch((error: unknown) => {
-              logger.error("Error processing file_shared event:", error)
-              notifyErrorToUser(
-                pseudoEvent.channel,
-                "There was an error processing your image. Please try again later.",
-              ).catch(console.error)
-            })
-          } else {
-            logger.info("file_shared event is not an image, ignoring")
-          }
-        } catch (error) {
-          logger.error("Error handling file_shared event:", error)
-        }
       }
     }
 
