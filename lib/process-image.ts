@@ -103,6 +103,21 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     processingStage = "generating image with gpt-image-1"
     logger.info("Generating image with gpt-image-1")
 
+    // Prepare image input for OpenAI images.edit
+    let img_input
+    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+      // Download image as stream
+      logger.debug("Starting image download from URL with timeout")
+      const response = await axios.get(imageUrl, { responseType: "stream", timeout: 10000 })
+      logger.debug("Image download response received")
+      img_input = response.data
+    } else {
+      // Read local file as stream
+      img_input = fs.createReadStream(imageUrl)
+    }
+
+    logger.debug("Calling OpenAI images.edit API")
+
     // Now use the gpt-image-1 model to generate the image
     let imageGenResponse
     try {
@@ -110,7 +125,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       imageGenResponse = await openai.images.edit({
         model: "gpt-image-1",
         prompt: userPrompt,
-        image: fs.readFileSync(imageUrl),
+        image: img_input,
       })
 
       logger.info("Received image generation response from OpenAI")

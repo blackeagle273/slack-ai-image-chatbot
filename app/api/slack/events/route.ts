@@ -149,6 +149,12 @@ async function processEvent(event: any, app: App) {
     const channelId = event.channel
     const text = event.text || ""
 
+    // Prevent processing if the message is an error message containing an image URL
+    if (text.includes("Error") && text.match(/https?:\/\/\S+/)) {
+      logger.info("Skipping processing for error message containing image URL")
+      return
+    }
+
     // Only process image files
     const imageFiles = files.filter((file: any) => file.mimetype && file.mimetype.startsWith("image/"))
 
