@@ -77,7 +77,7 @@ export async function POST(request: Request) {
           logger.info(`Processing message with ${event.files.length} files`)
 
           // Process asynchronously to respond to Slack quickly
-          processEvent(event).catch((error) => {
+          processEvent(event, app).catch((error: unknown) => {
             logger.error("Error in async event processing:", error)
             notifyErrorToUser(
               event.channel,
@@ -128,7 +128,7 @@ async function processEvent(event: any) {
         prompt: text,
         userId,
         channelId,
-        app,
+        app, // <-- app is undefined here, fix by passing app as parameter
       })
     } else {
       // Inform user that no valid images were found

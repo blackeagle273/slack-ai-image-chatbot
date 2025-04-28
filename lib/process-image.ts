@@ -27,6 +27,7 @@ enum ErrorType {
 }
 
 export async function processImageRequest({ imageUrl, prompt, userId, channelId, app }: ProcessImageRequestParams) {
+  logger.debug("processImageRequest called")
   // Track the processing stage for better error messages
   let processingStage = "starting"
 
