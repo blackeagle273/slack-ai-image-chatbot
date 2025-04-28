@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     }
 
     // Handle events
-    if (payload.type === "event_callback") {
+    if (payload.type === "event_callback" && payload.event.type === "message") {
       const event = payload.event
 
       // Skip bot messages to prevent loops
@@ -67,13 +67,6 @@ export async function POST(request: Request) {
         logger.debug("Skipping bot message")
         return NextResponse.json({ ok: true })
       }
-
-      if (event.type === 'file_shared') {
-        logger.debug("Skipping file shared")
-        return NextResponse.json({ ok: true })
-      }
-
-      logger.info(`Received event: ${event.type} from user: ${event.user} in channelID: ${event.channelId} || chaneel: ${event.channel}`)
 
       // Log full event object if user is undefined
       if (!event.user) {
