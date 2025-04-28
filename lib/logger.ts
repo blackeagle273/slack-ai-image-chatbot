@@ -8,7 +8,7 @@ enum LogLevel {
 
 // Get the current log level from environment or default to INFO
 const currentLogLevel = process.env.LOG_LEVEL
-  ? LogLevel[process.env.LOG_LEVEL as keyof typeof LogLevel] || LogLevel.INFO
+  ? (LogLevel[process.env.LOG_LEVEL.toUpperCase() as keyof typeof LogLevel] ?? LogLevel.INFO)
   : LogLevel.INFO
 
 console.log(`Logger initialized with LOG_LEVEL=${process.env.LOG_LEVEL}, resolved level=${currentLogLevel}`)
