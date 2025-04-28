@@ -34,6 +34,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     logger.info(`Processing image request for user ${userId} with prompt: ${prompt}`)
 
     // Inform user that processing has started with more details
+    logger.debug("Sending initial processing message to Slack")
     await app.client.chat.postMessage({
       channel: channelId,
       text: `:hourglass: I'm processing your image request. This typically takes 15-30 seconds...`,
@@ -47,12 +48,16 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         },
       ],
     })
+    logger.debug("Initial processing message sent to Slack")
 
     // Check if the user's message contains a preset editing command
+    logger.debug("Parsing editing command from prompt")
     const editingOption = parseEditingCommand(prompt.trim())
+    logger.debug(`Editing option parsed: ${editingOption ? editingOption.name : "none"}`)
 
     // Handle help command
     if (prompt.trim().toLowerCase() === "/help") {
+      logger.debug("Help command detected, sending help text")
       await app.client.chat.postMessage({
         channel: channelId,
         blocks: [
@@ -65,6 +70,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
           },
         ],
       })
+      logger.debug("Help text sent")
       return
     }
 
@@ -74,12 +80,14 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       : prompt.trim() || "Enhance this image and make it look better"
 
     // Update user on progress with editing option info if applicable
+    logger.debug("Sending progress update message to Slack")
     await app.client.chat.postMessage({
       channel: channelId,
       text: editingOption
         ? `:art: Applying *${editingOption.name}* style ${editingOption.emoji}`
         : `:art: Now applying your edits: "${userPrompt}"`,
     })
+    logger.debug("Progress update message sent")
 
     processingStage = "generating image with gpt-image-1"
     logger.info("Generating image with gpt-image-1")
@@ -140,6 +148,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     // Download the generated image
     let generatedImageResponse
     try {
+      logger.debug("Downloading generated image from URL")
       generatedImageResponse = await axios.get(generatedImageUrl, {
         responseType: "arraybuffer",
         timeout: 10000, // 10 second timeout
@@ -154,6 +163,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     // Upload the image to Slack
     let uploadResponse
     try {
+      logger.debug("Uploading generated image to Slack")
       uploadResponse = await app.client.files.upload({
         channels: channelId,
         file: generatedImageResponse.data,
@@ -171,6 +181,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     }
 
     // Send a completion message with helpful tips
+    logger.debug("Sending image processing completion message to Slack")
     await app.client.chat.postMessage({
       channel: channelId,
       blocks: [
@@ -217,6 +228,7 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     }
 
     // Send a user-friendly error message
+    logger.debug("Sending error message to user in Slack")
     await app.client.chat.postMessage({
       channel: channelId,
       blocks: [
