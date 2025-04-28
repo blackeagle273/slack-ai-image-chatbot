@@ -107,7 +107,9 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     let img_input
     if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
       // Download image as stream
-      const response = await axios.get(imageUrl, { responseType: "stream" })
+      logger.debug("Starting image download from URL with timeout")
+      const response = await axios.get(imageUrl, { responseType: "stream", timeout: 10000 })
+      logger.debug("Image download response received")
       img_input = response.data
     } else {
       // Read local file as stream
@@ -143,11 +145,13 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     }
 
     const generatedImageUrl = imageGenResponse?.data?.[0]?.url
-
+    
     if (!generatedImageUrl) {
       logger.error("No image URL returned from OpenAI")
       throw { type: ErrorType.OPENAI_ERROR, message: "No image URL returned from OpenAI" }
     }
+    
+    logger.info("Image generation successful, URL:", generatedImageUrl)
 
     logger.info("Successfully received image URL from OpenAI")
 

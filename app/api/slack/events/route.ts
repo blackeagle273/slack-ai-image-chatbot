@@ -145,7 +145,7 @@ export async function POST(request: Request) {
 async function processEvent(event: any, app: App) {
   try {
     const files = event.files
-    const userId = event.user
+    const userId = event.user_id || event.user
     const channelId = event.channel
     const text = event.text || ""
 
