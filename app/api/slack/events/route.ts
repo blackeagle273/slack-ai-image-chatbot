@@ -80,6 +80,7 @@ export async function POST(request: Request) {
         // Check if this is a message with files
         if (event.files && event.files.length > 0) {
           logger.info(`Processing message with ${event.files.length} files`)
+          logger.info(`Files: ${event.files}`)
 
           // Process asynchronously to respond to Slack quickly
           processEvent(event, app).catch((error: unknown) => {
