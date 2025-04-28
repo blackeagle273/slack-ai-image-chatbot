@@ -70,6 +70,11 @@ export async function POST(request: Request) {
 
       logger.info(`Received event: ${event.type} from user: ${event.user}`)
 
+      // Log full event object if user is undefined
+      if (!event.user) {
+        logger.debug("Event object with undefined user:", event)
+      }
+
       // Handle direct messages with files
       if (event.type === "message" && event.channel_type === "im") {
         // Check if this is a message with files
@@ -93,6 +98,33 @@ export async function POST(request: Request) {
           logger.info("Notifying user about missing image")
           notifyUserAboutMissingImage(event.channel, event.user).catch(console.error)
         }
+      } else if (event.type === "file_shared") {
+        logger.info("Handling file_shared event")
+        // Fetch file info and process if image
+        try {
+          const fileId = event.file_id
+          const fileInfo = await app.client.files.info({ file: fileId })
+          if (fileInfo.file && fileInfo.file.mimetype && fileInfo.file.mimetype.startsWith("image/")) {
+            // Construct a pseudo event to reuse processEvent
+            const pseudoEvent = {
+              files: [fileInfo.file],
+              user: event.user_id || event.user,
+              channel: event.channel_id || event.channel,
+              text: "", // No prompt text in file_shared event
+            }
+            processEvent(pseudoEvent, app).catch((error: unknown) => {
+              logger.error("Error processing file_shared event:", error)
+              notifyErrorToUser(
+                pseudoEvent.channel,
+                "There was an error processing your image. Please try again later.",
+              ).catch(console.error)
+            })
+          } else {
+            logger.info("file_shared event is not an image, ignoring")
+          }
+        } catch (error) {
+          logger.error("Error handling file_shared event:", error)
+        }
       }
     }
 
@@ -110,7 +142,7 @@ export async function POST(request: Request) {
   }
 }
 
-async function processEvent(event: any) {
+async function processEvent(event: any, app: App) {
   try {
     const files = event.files
     const userId = event.user
@@ -128,7 +160,7 @@ async function processEvent(event: any) {
         prompt: text,
         userId,
         channelId,
-        app, // <-- app is undefined here, fix by passing app as parameter
+        app,
       })
     } else {
       // Inform user that no valid images were found

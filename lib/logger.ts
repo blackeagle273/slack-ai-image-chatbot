@@ -11,6 +11,8 @@ const currentLogLevel = process.env.LOG_LEVEL
   ? LogLevel[process.env.LOG_LEVEL as keyof typeof LogLevel] || LogLevel.INFO
   : LogLevel.INFO
 
+console.log(`Logger initialized with LOG_LEVEL=${process.env.LOG_LEVEL}, resolved level=${currentLogLevel}`)
+
 // Format the log message with timestamp and metadata
 function formatLogMessage(level: string, message: string, metadata?: unknown): string {
   const timestamp = new Date().toISOString()
