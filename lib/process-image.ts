@@ -36,19 +36,23 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
 
     // Inform user that processing has started with more details
     logger.debug("Sending initial processing message to Slack")
-    await app.client.chat.postMessage({
-      channel: channelId,
-      text: `:hourglass: I'm processing your image request. This typically takes 15-30 seconds...`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `:hourglass: *Processing your image*\n\nI'll edit your image based on: "${prompt || "Enhance this image"}"\n\nThis typically takes 15-30 seconds...`,
+    try {
+      await app.client.chat.postMessage({
+        channel: channelId,
+        text: `:hourglass: I'm processing your image request. This typically takes 15-30 seconds...`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `:hourglass: *Processing your image*\n\nI'll edit your image based on: "${prompt || "Enhance this image"}"\n\nThis typically takes 15-30 seconds...`,
+            },
           },
-        },
-      ],
-    })
+        ],
+      });
+    } catch (error) {
+      console.error("Failed to post message to Slack:", error);
+    }
     logger.debug("Initial processing message sent to Slack")
 
     // Parse editing command safely
