@@ -1,5 +1,6 @@
 import { OpenAI } from "openai"
 import axios from "axios"
+import fs from "fs"
 import { logger } from "./logger"
 import { parseEditingCommand, generateHelpText } from "@/lib/editing-options"
 
@@ -24,9 +25,6 @@ enum ErrorType {
   UNKNOWN_ERROR = "UNKNOWN_ERROR",
 }
 
-// Maximum file size (10MB)
-const MAX_FILE_SIZE = 10 * 1024 * 1024
-
 export async function processImageRequest({ imageUrl, prompt, userId, channelId, app }: ProcessImageRequestParams) {
   // Track the processing stage for better error messages
   let processingStage = "starting"
@@ -48,35 +46,6 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
         },
       ],
     })
-
-    processingStage = "downloading"
-    logger.info("Downloading image from Slack")
-
-    // Download the image from Slack with timeout and retry
-    let imageResponse
-    try {
-      imageResponse = await axios.get(imageUrl, {
-        headers: {
-          Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-        },
-        responseType: "arraybuffer",
-        timeout: 10000, // 10 second timeout
-      })
-    } catch (error) {
-      logger.error("Error downloading image from Slack:", error)
-      throw { type: ErrorType.DOWNLOAD_ERROR, message: "Failed to download the image from Slack" }
-    }
-
-    const imageBuffer = Buffer.from(imageResponse.data)
-    logger.info(`Downloaded image, size: ${(imageBuffer.length / 1024).toFixed(2)}KB`)
-
-    // Validate image size
-    if (imageBuffer.length > MAX_FILE_SIZE) {
-      throw {
-        type: ErrorType.VALIDATION_ERROR,
-        message: `Image is too large (${(imageBuffer.length / (1024 * 1024)).toFixed(2)}MB). Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`,
-      }
-    }
 
     // Check if the user's message contains a preset editing command
     const editingOption = parseEditingCommand(prompt.trim())
@@ -114,30 +83,25 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     processingStage = "generating image with gpt-image-1"
     logger.info("Generating image with gpt-image-1")
 
-    // First, let's save the original image to Slack for reference
-    try {
-      await app.client.files.upload({
-        channels: channelId,
-        file: imageBuffer,
-        filename: "original-image.png",
-        initial_comment: `:frame_with_picture: Here's your original image for reference:`,
-      })
-      logger.info("Uploaded original image to Slack")
-    } catch (error) {
-      logger.error("Error uploading original image to Slack:", error)
-      // Continue even if this fails
+    // Prepare image input for OpenAI images.edit
+    let img_input
+    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+      // Download image as stream
+      const response = await axios.get(imageUrl, { responseType: "stream" })
+      img_input = response.data
+    } else {
+      // Read local file as stream
+      img_input = fs.createReadStream(imageUrl)
     }
 
     // Now use the gpt-image-1 model to generate the image
     let imageGenResponse
     try {
       // Direct approach with gpt-image-1
-      imageGenResponse = await openai.images.generate({
-        model: "dall-e-3", // Fallback to DALL-E 3 if gpt-image-1 is not available
-        prompt: `${userPrompt}. The image should be high quality and detailed.`,
-        n: 1,
-        size: "1024x1024",
-        quality: "hd",
+      imageGenResponse = await openai.images.edit({
+        model: "gpt-image-1",
+        prompt: userPrompt,
+        image: img_input,
       })
 
       logger.info("Received image generation response from OpenAI")
@@ -147,16 +111,16 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       // Send error details to the user
       await app.client.chat.postMessage({
         channel: channelId,
-        text: `:warning: Error from OpenAI: ${error.message || "Unknown error"}`,
+        text: `:warning: Error from OpenAI: ${error instanceof Error ? error.message : "Unknown error"}`,
       })
 
       throw {
         type: ErrorType.OPENAI_ERROR,
-        message: `Error generating image with OpenAI: ${error.message || "Unknown error"}`,
+        message: `Error generating image with OpenAI: ${error instanceof Error ? error.message : "Unknown error"}`,
       }
     }
 
-    const generatedImageUrl = imageGenResponse.data[0]?.url
+    const generatedImageUrl = imageGenResponse?.data?.[0]?.url
 
     if (!generatedImageUrl) {
       logger.error("No image URL returned from OpenAI")
@@ -234,14 +198,21 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     // Determine the error type and provide a helpful message
     let userErrorMessage = "Sorry, I encountered an error while processing your image."
 
-    if (error.type === ErrorType.DOWNLOAD_ERROR) {
-      userErrorMessage = "I couldn't download your image. Please try uploading it again."
-    } else if (error.type === ErrorType.OPENAI_ERROR) {
-      userErrorMessage = `There was a problem editing your image: ${error.message}`
-    } else if (error.type === ErrorType.UPLOAD_ERROR) {
-      userErrorMessage = "Your image was edited successfully, but I couldn't upload it back to Slack. Please try again."
-    } else if (error.type === ErrorType.VALIDATION_ERROR) {
-      userErrorMessage = error.message
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "type" in error
+    ) {
+      const typedError = error as { type: ErrorType; message?: string }
+      if (typedError.type === ErrorType.DOWNLOAD_ERROR) {
+        userErrorMessage = "I couldn't download your image. Please try uploading it again."
+      } else if (typedError.type === ErrorType.OPENAI_ERROR) {
+        userErrorMessage = `There was a problem editing your image: ${typedError.message}`
+      } else if (typedError.type === ErrorType.UPLOAD_ERROR) {
+        userErrorMessage = "Your image was edited successfully, but I couldn't upload it back to Slack. Please try again."
+      } else if (typedError.type === ErrorType.VALIDATION_ERROR) {
+        userErrorMessage = typedError.message || ""
+      }
     }
 
     // Send a user-friendly error message
