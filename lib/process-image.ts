@@ -50,10 +50,16 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     })
     logger.debug("Initial processing message sent to Slack")
 
-    // Check if the user's message contains a preset editing command
-    logger.debug("Parsing editing command from prompt")
-    const editingOption = parseEditingCommand(prompt.trim())
-    logger.debug(`Editing option parsed: ${editingOption ? editingOption.name : "none"}`)
+    // Parse editing command safely
+    let editingOption
+    try {
+      logger.debug("Parsing editing command from prompt")
+      editingOption = parseEditingCommand(prompt.trim())
+      logger.debug(`Editing option parsed: ${editingOption ? editingOption.name : "none"}`)
+    } catch (err) {
+      logger.error("Error parsing editing command:", err)
+      editingOption = null
+    }
 
     // Handle help command
     if (prompt.trim().toLowerCase() === "/help") {
@@ -80,14 +86,18 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       : prompt.trim() || "Enhance this image and make it look better"
 
     // Update user on progress with editing option info if applicable
-    logger.debug("Sending progress update message to Slack")
-    await app.client.chat.postMessage({
-      channel: channelId,
-      text: editingOption
-        ? `:art: Applying *${editingOption.name}* style ${editingOption.emoji}`
-        : `:art: Now applying your edits: "${userPrompt}"`,
-    })
-    logger.debug("Progress update message sent")
+    try {
+      logger.debug("Sending progress update message to Slack")
+      await app.client.chat.postMessage({
+        channel: channelId,
+        text: editingOption
+          ? `:art: Applying *${editingOption.name}* style ${editingOption.emoji}`
+          : `:art: Now applying your edits: "${userPrompt}"`,
+      })
+      logger.debug("Progress update message sent")
+    } catch (err) {
+      logger.error("Error sending progress update message:", err)
+    }
 
     processingStage = "generating image with gpt-image-1"
     logger.info("Generating image with gpt-image-1")
@@ -102,6 +112,8 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
       // Read local file as stream
       img_input = fs.createReadStream(imageUrl)
     }
+
+    logger.debug("Calling OpenAI images.edit API")
 
     // Now use the gpt-image-1 model to generate the image
     let imageGenResponse
