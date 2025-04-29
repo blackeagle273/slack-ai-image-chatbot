@@ -98,3 +98,14 @@ app.event("message", async ({ event, client, logger }) => {
   await app.start();
   logger.info("⚡️ Slack Bolt app is running!");
 })();
+
+// Start a dummy HTTP server to satisfy App Runner's TCP health check
+const http = require('http');
+
+const port = process.env.PORT || 8080;
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Slack bot is running\n');
+}).listen(port, () => {
+  console.log(`Dummy HTTP server is listening on port ${port}`);
+});
