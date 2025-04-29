@@ -1,43 +1,32 @@
-# Slack Chatbot Socket Mode Setup - Verification and Updates
-
-## Current Setup Review
-- The Slack app is initialized using @slack/bolt's `App` class with `socketMode: true`.
-- Both `token` (bot token) and `appToken` (app-level token) are provided via environment variables.
-- Event listeners are registered using `app.event()`.
-- The app is started with `app.start()`.
-- Proper error handling and logging are implemented.
-
-This setup aligns with the official Slack Bolt Socket Mode documentation: https://slack.dev/bolt-js/concepts/socket-mode
-
-## Recommended Updates and Best Practices
-
-1. **Environment Variables**
-   - Ensure `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` are set correctly.
-   - `SLACK_APP_TOKEN` must start with `xapp-` and be generated from Slack App's Socket Mode settings.
-
-2. **Event Handling**
-   - Use `app.event()` to listen for Slack events.
-   - Filter events as needed (e.g., only direct messages).
-   - Avoid processing bot messages to prevent loops.
-
-3. **Error Handling**
-   - Catch and log errors in event handlers.
-   - Notify users on errors gracefully.
-
-4. **App Start**
-   - Use `await app.start()` in an async context.
-   - Log startup success or failure.
-
-5. **Security**
-   - Keep tokens secure and do not expose in logs.
-   - Use Slack's request verification for HTTP routes if any remain.
-
-6. **Deprecate HTTP Event Routes**
-   - Remove or disable any HTTP event routes to avoid conflicts with Socket Mode.
+# Refactor for AWS App Runner Deployment - Next.js Removal
 
 ## Summary
-Your current Socket Mode setup in `app/api/slack/events/route.ts` is consistent with Slack's recommended approach. Ensure environment variables are correct and that no conflicting HTTP event routes remain active.
+This project has been refactored to remove Next.js and run as a standalone Node.js application suitable for AWS App Runner deployment.
+
+## Changes Made
+- Removed Next.js dependency and scripts from package.json.
+- Added new scripts for development (`dev`), build (`build`), start (`start`), and linting.
+- Created a new entry point `server.js` in the root directory to initialize and run the Slack Socket Mode app.
+- Moved Slack bot logic from Next.js API routes to the standalone server.js.
+- Updated imports to relative paths suitable for the new structure.
+- Added TypeScript support and ESLint configuration for Node.js environment.
+
+## Running the App
+- Use `npm run dev` to run the app in development mode with ts-node.
+- Use `npm run build` to compile TypeScript to JavaScript.
+- Use `npm start` to run the compiled app.
+
+## Deployment to AWS App Runner
+- Build a Docker image with the app and push to a container registry.
+- Configure AWS App Runner to deploy the container.
+- Set environment variables (`SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `OPENAI_API_KEY`, etc.) in AWS App Runner.
+- Ensure the container listens on the correct port (default 8080 or as configured).
+
+## Notes
+- The Slack Socket Mode app uses WebSocket connection for event handling.
+- No HTTP API routes are used for Slack events.
+- Ensure all environment variables are securely managed.
 
 ---
 
-Please let me know if you want me to help implement any additional improvements or assist with deployment and testing.
+Please let me know if you need assistance with Dockerfile creation, AWS App Runner configuration, or further improvements.

@@ -1,17 +1,18 @@
-import { App, LogLevel } from "@slack/bolt";
-import { processImageRequest } from "@/lib/process-image";
-import { generateHelpText } from "@/lib/editing-options";
-import { logger } from "@/lib/logger";
-
+import 'dotenv/config';
+import slack from "@slack/bolt";
+const { App, LogLevel } = slack;
+import { processImageRequest } from "./lib/process-image.js";
+import { generateHelpText } from "./lib/editing-options.js";
+import { logger } from "./lib/logger.js";
 
 const app = new App({
-  token: process.env.SLACK_BOT_TOKEN!,
-  appToken: process.env.SLACK_APP_TOKEN!,
+  token: process.env.SLACK_BOT_TOKEN,
+  appToken: process.env.SLACK_APP_TOKEN,
   socketMode: true,
   logLevel: LogLevel.DEBUG,
 });
 
-async function handleHelpRequest(channelId: string) {
+async function handleHelpRequest(channelId) {
   try {
     await app.client.chat.postMessage({
       channel: channelId,
@@ -37,7 +38,7 @@ async function handleHelpRequest(channelId: string) {
   }
 }
 
-async function notifyUserAboutMissingImage(channelId: string, userId: string) {
+async function notifyUserAboutMissingImage(channelId, userId) {
   try {
     await app.client.chat.postMessage({
       channel: channelId,
@@ -48,7 +49,7 @@ async function notifyUserAboutMissingImage(channelId: string, userId: string) {
   }
 }
 
-async function notifyErrorToUser(channelId: string, message: string) {
+async function notifyErrorToUser(channelId, message) {
   try {
     await app.client.chat.postMessage({
       channel: channelId,
@@ -59,19 +60,17 @@ async function notifyErrorToUser(channelId: string, message: string) {
   }
 }
 
-app.event('message', async ({ event, client, logger }) => {
+app.event("message", async ({ event, client, logger }) => {
   try {
-    // Only handle messages in direct messages (im)
     if (event.channel_type !== "im") {
       return;
     }
 
-    // Skip bot messages
-    if ((event as any).bot_id || (event as any).subtype === "bot_message") {
+    if (event.bot_id || event.subtype === "bot_message") {
       return;
     }
 
-    const messageEvent = event as any;
+    const messageEvent = event;
 
     if (messageEvent.files && messageEvent.files.length > 0) {
       logger.info(`Processing message with ${messageEvent.files.length} files`);
@@ -83,32 +82,19 @@ app.event('message', async ({ event, client, logger }) => {
         userId: messageEvent.user,
         channelId: messageEvent.channel,
         app,
-      }).catch(async (error) => {
-        logger.error("Error in async event processing:", error);
-        await notifyErrorToUser(
-          messageEvent.channel,
-          "There was an error processing your request. Please try again later."
-        );
       });
-    } else if (messageEvent.text && messageEvent.text.trim().toLowerCase() === "/help") {
-      logger.info("Processing help request");
+    } else if (messageEvent.text && messageEvent.text.trim() === "/help") {
       await handleHelpRequest(messageEvent.channel);
     } else {
-      logger.info("Notifying user about missing image");
       await notifyUserAboutMissingImage(messageEvent.channel, messageEvent.user);
     }
   } catch (error) {
     logger.error("Error handling message event:", error);
+    await notifyErrorToUser(event.channel, "Sorry, something went wrong processing your request.");
   }
 });
 
 (async () => {
-  try {
-    await app.start();
-    logger.info("⚡️ Slack SocketModeApp is running!");
-  } catch (error) {
-    logger.error("Failed to start Slack SocketModeApp:", error);
-  }
+  await app.start();
+  logger.info("⚡️ Slack Bolt app is running!");
 })();
-
-export { app };
