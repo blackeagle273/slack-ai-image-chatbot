@@ -20,23 +20,41 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
   logger.debug("processImageRequest called");
   let initialMessageTs: string | undefined;
 
+  // Helper function to retry Slack API calls
+  async function retrySlackApiCall(fn: () => Promise<any>, retries = 3, delayMs = 1000) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        logger.warn(`Slack API call failed on attempt ${attempt}:`, error);
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        } else {
+          throw error;
+        }
+      }
+    }
+  }
+
   try {
     logger.info(`Processing image request for user ${userId} with prompt: ${prompt}`);
 
-    // Step 1: Post initial "Processing..." message
-    const initMessage = await app.client.chat.postMessage({
-      channel: channelId,
-      text: ":hourglass: Processing your image request...",
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `:hourglass: *Processing your image*\n\nPrompt: "${prompt || "Enhance this image"}"\n\nThis typically takes 15-30 seconds...`,
+    // Step 1: Post initial "Processing..." message with retry
+    const initMessage = await retrySlackApiCall(() =>
+      app.client.chat.postMessage({
+        channel: channelId,
+        text: ":hourglass: Processing your image request...",
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `:hourglass: *Processing your image*\n\nPrompt: "${prompt || "Enhance this image"}"\n\nThis typically takes 15-30 seconds...`,
+            },
           },
-        },
-      ],
-    });
+        ],
+      }),
+    );
 
     initialMessageTs = initMessage.ts;
     logger.debug(`Posted initial message at ts=${initialMessageTs}`);
@@ -83,31 +101,35 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     const outputImageResponse = await axios.get(generatedImageUrl, { responseType: "arraybuffer" });
     const outputImageBuffer = Buffer.from(outputImageResponse.data);
 
-    // Step 6: Upload the generated image to Slack
+    // Step 6: Upload the generated image to Slack with retry
     logger.debug("Uploading generated image to Slack...");
-    await app.client.files.upload({
-      channels: channelId,
-      file: outputImageBuffer,
-      filename: "edited-image.png",
-      initial_comment: `✨ Here's your edited image based on: "${userPrompt}"`,
-    });
+    await retrySlackApiCall(() =>
+      app.client.files.upload({
+        channels: channelId,
+        file: outputImageBuffer,
+        filename: "edited-image.png",
+        initial_comment: `✨ Here's your edited image based on: "${userPrompt}"`,
+      }),
+    );
 
-    // Step 7: Update the initial "Processing..." message to Success
+    // Step 7: Update the initial "Processing..." message to Success with retry
     if (initialMessageTs) {
-      await app.client.chat.update({
-        channel: channelId,
-        ts: initialMessageTs,
-        text: ":white_check_mark: Image editing complete!",
-        blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `:tada: *Image editing complete!*\n\nYour enhanced image is ready.`,
+      await retrySlackApiCall(() =>
+        app.client.chat.update({
+          channel: channelId,
+          ts: initialMessageTs!,
+          text: ":white_check_mark: Image editing complete!",
+          blocks: [
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `:tada: *Image editing complete!*\n\nYour enhanced image is ready.`,
+              },
             },
-          },
-        ],
-      });
+          ],
+        }),
+      );
     }
 
     logger.info("Image processing and messaging complete.");
@@ -115,30 +137,36 @@ export async function processImageRequest({ imageUrl, prompt, userId, channelId,
     logger.error("Error in processImageRequest:", error);
 
     if (initialMessageTs) {
-      // Update initial message to show error
-      await app.client.chat.update({
-        channel: channelId,
-        ts: initialMessageTs,
-        text: ":x: Error processing your image",
-        blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: ":warning: *Sorry!* Something went wrong while editing your image.",
-            },
-          },
-          {
-            type: "context",
-            elements: [
+      // Update initial message to show error with retry
+      try {
+        await retrySlackApiCall(() =>
+          app.client.chat.update({
+            channel: channelId,
+            ts: initialMessageTs!,
+            text: ":x: Error processing your image",
+            blocks: [
               {
-                type: "mrkdwn",
-                text: "Please try again later, or contact support if the issue persists.",
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: ":warning: *Sorry!* Something went wrong while editing your image.",
+                },
+              },
+              {
+                type: "context",
+                elements: [
+                  {
+                    type: "mrkdwn",
+                    text: "Please try again later, or contact support if the issue persists.",
+                  },
+                ],
               },
             ],
-          },
-        ],
-      });
+          }),
+        );
+      } catch (updateError) {
+        logger.error("Failed to update Slack message after error:", updateError);
+      }
     } else {
       logger.error("Could not update Slack message because no initial ts was recorded.");
     }

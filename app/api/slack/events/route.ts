@@ -141,12 +141,16 @@ async function processEvent(event: any, app: App) {
         app,
       })
     } else {
-      // Inform user that no valid images were found
+      // Inform user that no valid image files were found
       logger.info("No valid image files found")
-      await app.client.chat.postMessage({
-        channel: channelId,
-        text: "I can only process image files. Please upload an image with your instructions.",
-      })
+      try {
+        await app.client.chat.postMessage({
+          channel: channelId,
+          text: "I can only process image files. Please upload an image with your instructions.",
+        })
+      } catch (postError) {
+        logger.error("Failed to send message about missing image:", postError)
+      }
     }
   } catch (error) {
     logger.error("Error processing event:", error)
