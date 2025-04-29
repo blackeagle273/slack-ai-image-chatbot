@@ -41,8 +41,9 @@ async function handleHelpRequest(channelId: string) {
 
 export async function POST(request: Request) {
   try {
-    // Verify the request is coming from Slack
+    logger.info("Received new Slack event request");
     const rawBody = await request.text()
+    logger.debug("Raw request body:", rawBody)
     const isValid = await verifySlackRequest(request, rawBody)
 
     if (!isValid) {
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
 
     // Handle URL verification challenge
     if (payload.type === "url_verification") {
+      logger.info("Responding to Slack URL verification challenge")
       return NextResponse.json({ challenge: payload.challenge })
     }
 
@@ -101,15 +103,18 @@ export async function POST(request: Request) {
     }
 
     // Respond quickly to acknowledge receipt
+    logger.info("Sending 200 OK response to Slack")
     return NextResponse.json({ ok: true })
   } catch (error) {
     logger.error("Error handling Slack event:", error)
 
     // Determine if it's a parsing error
     if (error instanceof SyntaxError) {
+      logger.info("Sending 400 Invalid JSON response to Slack")
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 })
     }
 
+    logger.info("Sending 500 Internal Server Error response to Slack")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
