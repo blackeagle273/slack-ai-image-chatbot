@@ -140,8 +140,6 @@ app.event('message', async ({ event, client, logger }) => {
 
     const messageEvent = event;
 
-    logger.info(`Message: ${JSON.stringify(messageEvent, null, 2)}`);
-
     // Helper function to disable confirmation messages
     async function disableConfirmationMessages(selectedSizeText) {
       const historyResponse = await client.conversations.history({
