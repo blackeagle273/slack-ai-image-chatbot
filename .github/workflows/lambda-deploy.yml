@@ -20,6 +20,14 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+      
+      - name: Create .env file from secrets
+        run: |
+          touch .env
+          echo "LOG_LEVEL=${{ secrets.LOG_LEVEL }}" > .env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+          echo "SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}" >> .env
+          echo "SLACK_SIGNING_SECRET=${{ secrets.SLACK_SIGNING_SECRET }}" >> .env
 
       - name: Package Lambda function
         run: |
