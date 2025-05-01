@@ -3,6 +3,7 @@ frameworkVersion: "4"
 provider:
   name: aws
   runtime: nodejs22.x
+  timeout: 360
   environment:
     SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET}
     SLACK_BOT_TOKEN: ${env:SLACK_BOT_TOKEN}

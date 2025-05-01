@@ -266,6 +266,7 @@ registerSlackActions(app, {
 });
 
 export const handler = async (event, context, callback) => {
+  context.callbackWaitsForEmptyEventLoop = false;
   const lambdaHandler = await awsLambdaReceiver.start();
   return lambdaHandler(event, context, callback);
 };
