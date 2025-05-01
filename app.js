@@ -2,7 +2,7 @@ import 'dotenv/config';
 import pkg from '@slack/bolt';
 const { App, LogLevel, AwsLambdaReceiver } = pkg;
 import { processImageRequest, processImageGenerationRequest } from './lib/process-image.js';
-import { logger } from './lib/logger.js';
+import { notifyErrorToUser } from './lib/notify-user.js';
 import registerSlackActions from './lib/slack-actions.js';
 
 const awsLambdaReceiver = new AwsLambdaReceiver({
@@ -15,28 +15,6 @@ const app = new App({
   receiver: awsLambdaReceiver,
   logLevel: LogLevel.DEBUG,
 });
-
-async function notifyUserAboutMissingImage(channelId, userId) {
-  try {
-    await app.client.chat.postMessage({
-      channel: channelId,
-      text: `<@${userId}> I need an image to work with! Please upload an image along with your instructions.`,
-    });
-  } catch (error) {
-    logger.error('Error sending missing image notification:', error);
-  }
-}
-
-async function notifyErrorToUser(channelId, message) {
-  try {
-    await app.client.chat.postMessage({
-      channel: channelId,
-      text: message,
-    });
-  } catch (error) {
-    logger.error('Error sending error notification:', error);
-  }
-}
 
 const processedEventIds = new Set();
 
@@ -243,17 +221,11 @@ app.event('message', async ({ event, client, logger }) => {
       } catch (error) {
         logger.error('Error sending confirmation message with button:', error);
       }
-    } else {
-      if (messageEvent.user) {
-        await notifyUserAboutMissingImage(
-          messageEvent.channel,
-          messageEvent.user
-        );
-      }
     }
   } catch (error) {
     logger.error('Error handling message event:', error);
     await notifyErrorToUser(
+      app,
       event.channel,
       'Sorry, something went wrong processing your request.'
     );
