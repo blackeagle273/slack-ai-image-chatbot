@@ -1,4 +1,4 @@
-# AI Image Slack Chatbot
+# Slack AI Image Chatbot
 
 This project is a Slack chatbot that uses AI to generate images based on user prompts. The bot is built using the Slack Bolt framework and deployed using Serverless Framework.
 
@@ -21,8 +21,8 @@ Before you begin, ensure you have met the following requirements:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/ai-image-slack-chatbot.git
-   cd ai-image-slack-chatbot
+   git clone https://github.com/athletics/slack-ai-image-chatbot
+   cd slack-ai-image-chatbot
    ```
 
 2. Install project dependencies:
@@ -51,7 +51,7 @@ To run the application locally, follow these steps:
    ```
    This will start a local version of your AWS Lambda functions and API Gateway endpoints.
 
-3. Update your Slack App configuration:
+3. If you haven't created your app yet, skip to that section now. If you have, you'll need to update your Slack App configuration:
    - Once ngrok is running, you'll see a forwarding URL in the format `https://xxxx-xx-xx-xx-xx.ngrok.io`.
    - Update your Slack App's interactivity request URL to point to this ngrok URL with the path `/slack/events`.
    - Update your Slack App's event subscription URL to point to this ngrok URL with the path `/slack/events`.
@@ -60,15 +60,56 @@ To run the application locally, follow these steps:
    - The bot will be running locally on port 3000.
    - You can interact with it through your configured Slack workspace.
 
+## Slack App Configuration
+
+1. Create a new Slack app on the [Slack Developer Console](https://api.slack.com/apps).
+
+2. Choose the "From Scratch" option, then name your app and pick your workspace.
+
+3. Grab the Signing Secret on now for the `SLACK_SIGNING_SECRET` environment variable.
+
+4. Scroll down and add **Display Information** for your app so your team knows what it's for.
+
+5. Go to **OAuth & Permissions** then scroll down to add the following to **Bot Token Scopes**:
+```
+app_mentions:read
+chat:write
+files:read
+files:write
+im:write
+```
+6. In **OAuth Tokens** on that same page, click on **Install to Workspace** and authorize the app. This gives you the `SLACK_BOT_TOKEN` environment variable.
+
+7. Go to **Event Subscriptions** then scroll down to add the following to **Subscribe to Bot Events**:
+```
+message.im
+```
+
+8. Using the URL created by ngrok, add it at the top of the page in Request URL with the appended `/slack/events`. After it verifies, save the changes.
+
+9. With that same URL, go to **Interactivity & Shortcuts** and it there.
+
+10. Go to **App Home** and make sure you check the box under **Messages Tab** that reads "Allow users to send Slash commands and messages from the messages tab"
+
+11. Optionally, you can toggle the "Always Show My Bot as Online" here as well.
+
+12. Go to **Install App** and click the "Reinstall to {Workspace Name}" button and authorize the app again.
+
+13. Switch to the Slack application and scroll to the Apps in the message bar. Click "+ Add apps" and search for the app you just created and install it into your workspace.
+
+14. If everything worked as planned, you should be able to message the App an image prompt and it will respond with a size selection and a button to Generate.
+
 ## Key Files Deployed to Lambda
 
 When deploying to AWS Lambda, the following key files and directories are included in the deployment package:
 
-1. `app.js`: The main application file that contains the Lambda handler function.
-2. `lib/`: The directory containing all the application logic and utilities:
-   - `lib/logger.js`: Logging functionality
-   - `lib/process-image.js`: Image processing logic
-   - `lib/slack-actions.js`: Slack bot interactivity action logic
+    .
+    ├── app.js                # The main application file that contains the Lambda handler function.
+    ├── lib/                  # The directory containing all the application logic and utilities
+    |   ├── logger.js         # Logging functionality
+    |   ├── process-image.js  # Image processing logic
+    |   └── slack-actions.js  # Slack bot interactivity action logic
+
 
 These files are automatically included in the deployment package by the Serverless Framework.
 

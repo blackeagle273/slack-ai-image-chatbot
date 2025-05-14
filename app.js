@@ -1,7 +1,10 @@
 import 'dotenv/config';
 import pkg from '@slack/bolt';
 const { App, LogLevel, AwsLambdaReceiver } = pkg;
-import { processImageRequest, processImageGenerationRequest } from './lib/process-image.js';
+import {
+  processImageRequest,
+  processImageGenerationRequest,
+} from './lib/process-image.js';
 import { notifyErrorToUser } from './lib/notify-user.js';
 import registerSlackActions from './lib/slack-actions.js';
 
@@ -67,6 +70,31 @@ function buildSizeSelectionBlock(initialValue = 'square') {
     },
   };
 }
+// Build the mask checkbox block
+function buildMaskCheckboxBlock() {
+  return {
+    type: 'section',
+    block_id: 'mask_checkbox_block',
+    text: {
+      type: 'mrkdwn',
+      text: '*Mask option*',
+    },
+    accessory: {
+      type: 'checkboxes',
+      action_id: 'mask_checkbox',
+      options: [
+        {
+          text: {
+            type: 'plain_text',
+            text: 'Is the first image a mask',
+            emoji: true,
+          },
+          value: 'true',
+        },
+      ],
+    },
+  };
+}
 
 function buildGenerateButtonBlock() {
   return {
@@ -85,8 +113,12 @@ function buildGenerateButtonBlock() {
   };
 }
 
-function buildConfirmationMessageBlocks(initialSize = 'square', introText = 'Choose a size, then generate your image.') {
-  return [
+function buildConfirmationMessageBlocks(
+  includeMaskCheckbox = false,
+  initialSize = 'square',
+  introText = 'Choose a size, then generate your image.'
+) {
+  const blocks = [
     {
       type: 'section',
       text: {
@@ -94,9 +126,16 @@ function buildConfirmationMessageBlocks(initialSize = 'square', introText = 'Cho
         text: introText,
       },
     },
-    buildSizeSelectionBlock(initialSize),
-    buildGenerateButtonBlock(),
   ];
+
+  if (includeMaskCheckbox) {
+    blocks.push(buildMaskCheckboxBlock());
+  }
+
+  blocks.push(buildSizeSelectionBlock(initialSize));
+  blocks.push(buildGenerateButtonBlock());
+
+  return blocks;
 }
 
 app.event('message', async ({ event, client, logger }) => {
@@ -119,7 +158,10 @@ app.event('message', async ({ event, client, logger }) => {
     const messageEvent = event;
 
     // Helper function to disable confirmation messages
-    async function disableConfirmationMessages(selectedSizeText) {
+    async function disableConfirmationMessages(
+      selectedSizeText = '_Image size selection closed_',
+      selectedMaskText = '_Mask selection closed_'
+    ) {
       const historyResponse = await client.conversations.history({
         channel: messageEvent.channel,
         limit: 50,
@@ -148,6 +190,16 @@ app.event('message', async ({ event, client, logger }) => {
             return;
           }
           const updatedBlocks = msg.blocks.map((block) => {
+            if (block.block_id === 'mask_checkbox_block') {
+              return {
+                type: 'section',
+                block_id: 'mask_checkbox_block',
+                text: {
+                  type: 'mrkdwn',
+                  text: selectedMaskText,
+                },
+              };
+            }
             if (block.block_id === 'select_image_size_block') {
               return {
                 type: 'section',
@@ -160,9 +212,7 @@ app.event('message', async ({ event, client, logger }) => {
             }
             if (
               block.type === 'actions' &&
-              block.elements.some(
-                (el) => el.action_id === 'generate_image'
-              )
+              block.elements.some((el) => el.action_id === 'generate_image')
             ) {
               return {
                 type: 'section',
@@ -182,9 +232,52 @@ app.event('message', async ({ event, client, logger }) => {
               text: msg.text || 'Image size selection disabled',
             });
           } catch (updateError) {
-            logger.error('Failed to update message to disable radios:', updateError);
+            logger.error(
+              'Failed to update message to disable radios:',
+              updateError
+            );
           }
         }
+      }
+    }
+
+    // Helper function to delete all previous messages in the DM channel
+    async function deleteAllPreviousMessages(channelId) {
+      try {
+        let hasMore = true;
+        let cursor;
+        while (hasMore) {
+          const historyResponse = await client.conversations.history({
+            channel: channelId,
+            limit: 100,
+            cursor: cursor,
+          });
+          if (!historyResponse.ok) {
+            logger.error(
+              'Failed to fetch conversation history for deletion:',
+              historyResponse.error
+            );
+            break;
+          }
+          const messages = historyResponse.messages;
+          for (const msg of messages) {
+            try {
+              await client.chat.delete({
+                channel: channelId,
+                ts: msg.ts,
+              });
+            } catch (deleteError) {
+              logger.error(
+                `Failed to delete message ts=${msg.ts}:`,
+                deleteError
+              );
+            }
+          }
+          hasMore = historyResponse.has_more;
+          cursor = historyResponse.response_metadata?.next_cursor;
+        }
+      } catch (error) {
+        logger.error('Error deleting previous messages:', error);
       }
     }
 
@@ -193,25 +286,37 @@ app.event('message', async ({ event, client, logger }) => {
       logger.info(`Processing message with ${messageEvent.files.length} files`);
 
       try {
-         // Disable previous confirmation messages with generic text
-        await disableConfirmationMessages('_Image size selection closed_');
+        // Disable previous confirmation messages with generic text
+        await disableConfirmationMessages();
 
-        // Send confirmation message with size selection and generate button
+        // Send confirmation message with size selection, mask checkbox if multiple files, and generate button
         await app.client.chat.postMessage({
           channel: messageEvent.channel,
           text: 'Choose a size, then generate your image.',
-          blocks: buildConfirmationMessageBlocks(),
+          blocks: buildConfirmationMessageBlocks(messageEvent.files.length > 1),
         });
       } catch (error) {
         logger.error('Error sending confirmation message with button:', error);
       }
 
-    // Refactored conditional for text prompts
+      // Refactored conditional for text prompts
     } else if (messageEvent.text && messageEvent.text.trim().length > 0) {
-      logger.info('Received message with text but no files; sending confirmation message with generate button.');
+      const trimmedText = messageEvent.text.trim().toLowerCase();
+      if (trimmedText === 'delete all previous messages') {
+        logger.info('Received command to delete all previous messages.');
+        await deleteAllPreviousMessages(messageEvent.channel);
+        await app.client.chat.postMessage({
+          channel: messageEvent.channel,
+          text: 'All previous messages have been deleted.',
+        });
+        return;
+      }
+      logger.info(
+        'Received message with text but no files; sending confirmation message with generate button.'
+      );
       try {
         // Disable previous confirmation messages with generic text
-        await disableConfirmationMessages('_Image size selection closed_');
+        await disableConfirmationMessages();
 
         await app.client.chat.postMessage({
           channel: messageEvent.channel,
