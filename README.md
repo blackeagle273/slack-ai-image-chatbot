@@ -21,7 +21,7 @@ Before you begin, ensure you have met the following requirements:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/athletics/slack-ai-image-chatbot
+   git clone https://github.com/blackeagle273/slack-ai-image-chatbot
    cd slack-ai-image-chatbot
    ```
 
